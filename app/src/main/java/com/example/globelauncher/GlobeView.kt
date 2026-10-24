@@ -13,114 +13,56 @@ import android.view.View
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 class GlobeView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private val n = 700
     private val density = resources.displayMetrics.density
 
-    // Very rough continent outlines: pairs of (lon, lat) in degrees
-    private val polygons: Array<FloatArray> = arrayOf(
-        // North America
-        floatArrayOf(
-            -168f, 66f, -160f, 70f, -140f, 70f, -120f, 72f, -95f, 72f, -82f, 68f, -64f, 60f,
-            -56f, 52f, -66f, 45f, -70f, 42f, -76f, 35f, -81f, 30f, -80f, 25f, -84f, 30f,
-            -90f, 29f, -97f, 27f, -97f, 22f, -92f, 18f, -88f, 21f, -87f, 15f, -83f, 10f,
-            -78f, 8f, -80f, 7f, -85f, 10f, -92f, 14f, -97f, 16f, -105f, 20f, -110f, 24f,
-            -113f, 31f, -117f, 32f, -123f, 38f, -124f, 46f, -130f, 54f, -140f, 60f,
-            -152f, 58f, -165f, 55f, -165f, 62f
-        ),
-        // South America
-        floatArrayOf(
-            -78f, 8f, -72f, 12f, -62f, 10f, -52f, 5f, -50f, 0f, -35f, -5f, -39f, -14f,
-            -41f, -22f, -48f, -26f, -58f, -35f, -65f, -41f, -68f, -52f, -72f, -54f,
-            -74f, -45f, -72f, -30f, -70f, -18f, -76f, -14f, -81f, -5f, -80f, 0f
-        ),
-        // Greenland
-        floatArrayOf(
-            -73f, 78f, -60f, 82f, -30f, 83f, -18f, 76f, -22f, 70f, -42f, 60f, -50f, 64f, -56f, 70f
-        ),
-        // Eurasia
-        floatArrayOf(
-            -10f, 36f, -9f, 43f, -1f, 46f, -4f, 48f, 2f, 51f, 8f, 54f, 10f, 57f, 5f, 62f,
-            15f, 69f, 28f, 71f, 40f, 67f, 60f, 69f, 80f, 73f, 105f, 78f, 130f, 72f, 160f, 70f,
-            180f, 68f, 180f, 65f, 170f, 60f, 160f, 55f, 156f, 51f, 143f, 52f, 140f, 46f,
-            130f, 42f, 127f, 38f, 125f, 40f, 121f, 40f, 122f, 31f, 120f, 25f, 110f, 20f,
-            106f, 10f, 103f, 2f, 100f, 8f, 98f, 16f, 92f, 22f, 88f, 22f, 80f, 15f, 77f, 8f,
-            73f, 17f, 70f, 22f, 62f, 25f, 57f, 26f, 49f, 30f, 44f, 37f, 36f, 36f, 30f, 36f,
-            27f, 37f, 28f, 41f, 23f, 38f, 20f, 40f, 14f, 45f, 8f, 44f, 3f, 43f, -5f, 36f
-        ),
-        // Arabia
-        floatArrayOf(
-            35f, 30f, 43f, 12f, 52f, 16f, 59f, 22f, 56f, 26f, 51f, 25f, 48f, 30f
-        ),
-        // Africa
-        floatArrayOf(
-            -17f, 21f, -10f, 35f, 10f, 37f, 32f, 31f, 34f, 28f, 43f, 12f, 51f, 12f, 40f, -3f,
-            40f, -15f, 35f, -25f, 30f, -31f, 20f, -35f, 15f, -28f, 12f, -15f, 9f, -1f,
-            9f, 4f, -8f, 4f, -17f, 14f
-        ),
-        // Australia
-        floatArrayOf(
-            114f, -22f, 122f, -18f, 130f, -12f, 137f, -12f, 142f, -11f, 146f, -19f, 153f, -26f,
-            150f, -37f, 140f, -38f, 131f, -31f, 115f, -34f
-        ),
-        // British Isles
-        floatArrayOf(
-            -5f, 50f, 1f, 51f, 0f, 57f, -5f, 58f, -6f, 54f
-        ),
-        // Japan
-        floatArrayOf(
-            130f, 31f, 135f, 34f, 141f, 36f, 142f, 45f, 140f, 40f, 136f, 36f
-        ),
-        // Indonesia (Sumatra / Borneo, very rough)
-        floatArrayOf(
-            95f, 5f, 105f, -6f, 102f, -4f, 98f, 2f
-        ),
-        floatArrayOf(
-            109f, 1f, 117f, 7f, 119f, 1f, 116f, -4f, 110f, -3f
-        )
-    )
+    // Footer texts: change these two lines to edit what is shown at the bottom
+    private val ownerName = "MOJTABA ALIMIRZAEI"
+    private val instagram = "@power_life313"
 
-    // Point data (Fibonacci sphere)
-    private val lat = DoubleArray(n)
-    private val lon = DoubleArray(n)
-    private val sinLat = DoubleArray(n)
-    private val cosLat = DoubleArray(n)
-    private val wx = DoubleArray(n)
-    private val wy = DoubleArray(n)
-    private val wz = DoubleArray(n)
-    private val land = BooleanArray(n)
+    // Points on the globe
+    private val n: Int
+    private val lat: DoubleArray
+    private val lon: DoubleArray
+    private val sinLat: DoubleArray
+    private val cosLat: DoubleArray
+    private val wx: DoubleArray
+    private val wy: DoubleArray
+    private val wz: DoubleArray
+    private val cid: IntArray
 
     // Projected data
-    private val vx = FloatArray(n)
-    private val vy = FloatArray(n)
-    private val vz = FloatArray(n)
-    private val sx = FloatArray(n)
-    private val sy = FloatArray(n)
+    private val vx: FloatArray
+    private val vy: FloatArray
+    private val vz: FloatArray
+    private val sx: FloatArray
+    private val sy: FloatArray
 
-    // Edges
+    // Edges (kind 0 = sea, 1 = land)
     private val edgeA: IntArray
     private val edgeB: IntArray
-    private val edgeLand: BooleanArray
+    private val edgeKind: IntArray
     private val edgeCount: Int
-    private val landLines: FloatArray
-    private val seaLines: FloatArray
+    private val bufSea: FloatArray
+    private val bufLand: FloatArray
+    private val bufBorder: FloatArray
+    private val bufSel: FloatArray
 
     // View state
-    private var rotLon = 30.0
-    private var rotLat = 20.0
+    private var rotLon = 53.0
+    private var rotLat = 32.0
     private var velLon = 0.0
     private val autoSpin = 5.0
     private var dragging = false
@@ -146,17 +88,36 @@ class GlobeView @JvmOverloads constructor(
     private val satVisible = BooleanArray(satCount)
     private val satRadius = 1.3f
 
+    private val tzCache = HashMap<String, TimeZone>()
+
+    private val palette = intArrayOf(
+        Color.rgb(120, 235, 255),
+        Color.rgb(90, 230, 200),
+        Color.rgb(110, 170, 255),
+        Color.rgb(170, 150, 255),
+        Color.rgb(140, 255, 200),
+        Color.rgb(100, 210, 255)
+    )
+
     // Paints
     private val bgPaint = Paint()
     private val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val seaLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(45, 70, 160, 255)
+        color = Color.argb(40, 70, 160, 255)
         strokeWidth = 0.8f * density
     }
     private val landLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(170, 90, 220, 255)
-        strokeWidth = 1.1f * density
+        color = Color.argb(90, 90, 220, 255)
+        strokeWidth = 0.9f * density
+    }
+    private val borderLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(235, 255, 255, 255)
+        strokeWidth = 1.5f * density
+    }
+    private val selLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(220, 255, 200, 70)
+        strokeWidth = 1.3f * density
     }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val satPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
@@ -166,57 +127,116 @@ class GlobeView @JvmOverloads constructor(
     }
     private val crossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.argb(230, 255, 200, 60)
+        color = Color.argb(240, 255, 200, 60)
         strokeWidth = 2f * density
+    }
+    private val countryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+        textSize = 21f * density
     }
     private val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
-        textSize = 46f * density
+        textSize = 44f * density
     }
     private val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(220, 120, 220, 255)
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
         textAlign = Paint.Align.CENTER
-        textSize = 15f * density
+        textSize = 14f * density
+    }
+    private val instaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(240, 230, 245, 255)
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        textAlign = Paint.Align.CENTER
+        textSize = 16f * density
+        letterSpacing = 0.08f
     }
 
     init {
-        val golden = PI * (3.0 - sqrt(5.0))
-        for (i in 0 until n) {
-            val s = 1.0 - 2.0 * (i + 0.5) / n
-            val la = asin(s)
-            var lo = (golden * i) % (2.0 * PI)
-            if (lo > PI) lo -= 2.0 * PI
-            lat[i] = la
-            lon[i] = lo
-            sinLat[i] = sin(la)
-            cosLat[i] = cos(la)
-            wx[i] = cos(la) * cos(lo)
-            wy[i] = cos(la) * sin(lo)
-            wz[i] = sin(la)
-            land[i] = isLand(Math.toDegrees(lo), Math.toDegrees(la))
+        // Build points from the 2 degree country grid, thinned toward the poles
+        val la = ArrayList<Double>()
+        val lo = ArrayList<Double>()
+        val ids = ArrayList<Int>()
+        for (r in 0 until WorldData.ROWS) {
+            val latD = 90.0 - (r + 0.5) * 2.0
+            val c = cos(Math.toRadians(latD))
+            val step = min(12, max(1, Math.round(1.0 / c).toInt()))
+            for (col in 0 until WorldData.COLS) {
+                val id = WorldData.idAtCell(r, col)
+                val lonD = -180.0 + (col + 0.5) * 2.0
+                val keep = if (id > 0) {
+                    col % step == 0
+                } else {
+                    r % 3 == 1 && col % (3 * step) == 1
+                }
+                if (keep) {
+                    la.add(Math.toRadians(latD))
+                    lo.add(Math.toRadians(lonD))
+                    ids.add(id)
+                }
+            }
         }
+        val cnt = la.size
+        val latArr = la.toDoubleArray()
+        val lonArr = lo.toDoubleArray()
+        val sinArr = DoubleArray(cnt) { sin(latArr[it]) }
+        val cosArr = DoubleArray(cnt) { cos(latArr[it]) }
+        n = cnt
+        lat = latArr
+        lon = lonArr
+        cid = ids.toIntArray()
+        sinLat = sinArr
+        cosLat = cosArr
+        wx = DoubleArray(cnt) { cosArr[it] * cos(lonArr[it]) }
+        wy = DoubleArray(cnt) { cosArr[it] * sin(lonArr[it]) }
+        wz = sinArr
+        vx = FloatArray(n)
+        vy = FloatArray(n)
+        vz = FloatArray(n)
+        sx = FloatArray(n)
+        sy = FloatArray(n)
 
+        // Edges between neighbouring points (points are ordered from north to south)
         val ea = ArrayList<Int>()
         val eb = ArrayList<Int>()
-        val threshold = cos(0.2)
+        val ek = ArrayList<Int>()
+        val landThr = cos(Math.toRadians(3.4))
+        val seaThr = cos(Math.toRadians(9.5))
+        val maxDlat = Math.toRadians(10.0)
         for (i in 0 until n) {
-            for (j in i + 1 until n) {
+            var j = i + 1
+            while (j < n && lat[i] - lat[j] <= maxDlat) {
                 val d = wx[i] * wx[j] + wy[i] * wy[j] + wz[i] * wz[j]
-                if (d > threshold) {
-                    ea.add(i)
-                    eb.add(j)
+                val iLand = cid[i] > 0
+                val jLand = cid[j] > 0
+                if (iLand && jLand) {
+                    if (d > landThr) {
+                        ea.add(i)
+                        eb.add(j)
+                        ek.add(1)
+                    }
+                } else if (!iLand && !jLand) {
+                    if (d > seaThr) {
+                        ea.add(i)
+                        eb.add(j)
+                        ek.add(0)
+                    }
                 }
+                j++
             }
         }
         edgeCount = ea.size
         edgeA = ea.toIntArray()
         edgeB = eb.toIntArray()
-        edgeLand = BooleanArray(edgeCount) { land[edgeA[it]] && land[edgeB[it]] }
-        landLines = FloatArray(edgeCount * 4)
-        seaLines = FloatArray(edgeCount * 4)
+        edgeKind = ek.toIntArray()
+        bufSea = FloatArray(edgeCount * 4)
+        bufLand = FloatArray(edgeCount * 4)
+        bufBorder = FloatArray(edgeCount * 4)
+        bufSel = FloatArray(edgeCount * 4)
 
         for (k in 0 until satCount) {
             satInc[k] = Math.toRadians(35.0 + (k * 37) % 55)
@@ -229,8 +249,8 @@ class GlobeView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         cx = w / 2f
-        cy = h * 0.42f
-        radius = min(w, h) * 0.36f
+        cy = h * 0.34f
+        radius = min(w * 0.36f, h * 0.19f)
         bgPaint.shader = RadialGradient(
             cx, cy, max(w, h) * 0.7f,
             intArrayOf(Color.rgb(8, 24, 48), Color.rgb(2, 6, 14), Color.BLACK),
@@ -256,6 +276,8 @@ class GlobeView @JvmOverloads constructor(
         }
         rotLon = wrapLon(rotLon)
 
+        val sel = WorldData.countryAt(rotLat, rotLon)
+
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
         // Atmosphere glow
@@ -271,37 +293,59 @@ class GlobeView @JvmOverloads constructor(
         project()
 
         // Edges
-        var lc = 0
-        var sc = 0
+        var cs = 0
+        var cl = 0
+        var cb = 0
+        var cn = 0
         for (e in 0 until edgeCount) {
             val a = edgeA[e]
             val b = edgeB[e]
             if (vz[a] <= 0f || vz[b] <= 0f) continue
-            if (edgeLand[e]) {
-                landLines[lc++] = sx[a]
-                landLines[lc++] = sy[a]
-                landLines[lc++] = sx[b]
-                landLines[lc++] = sy[b]
+            if (edgeKind[e] == 0) {
+                bufSea[cs++] = sx[a]
+                bufSea[cs++] = sy[a]
+                bufSea[cs++] = sx[b]
+                bufSea[cs++] = sy[b]
+            } else if (sel > 0 && cid[a] == sel && cid[b] == sel) {
+                bufSel[cn++] = sx[a]
+                bufSel[cn++] = sy[a]
+                bufSel[cn++] = sx[b]
+                bufSel[cn++] = sy[b]
+            } else if (cid[a] != cid[b]) {
+                bufBorder[cb++] = sx[a]
+                bufBorder[cb++] = sy[a]
+                bufBorder[cb++] = sx[b]
+                bufBorder[cb++] = sy[b]
             } else {
-                seaLines[sc++] = sx[a]
-                seaLines[sc++] = sy[a]
-                seaLines[sc++] = sx[b]
-                seaLines[sc++] = sy[b]
+                bufLand[cl++] = sx[a]
+                bufLand[cl++] = sy[a]
+                bufLand[cl++] = sx[b]
+                bufLand[cl++] = sy[b]
             }
         }
-        canvas.drawLines(seaLines, 0, sc, seaLinePaint)
-        canvas.drawLines(landLines, 0, lc, landLinePaint)
+        canvas.drawLines(bufSea, 0, cs, seaLinePaint)
+        canvas.drawLines(bufLand, 0, cl, landLinePaint)
+        canvas.drawLines(bufBorder, 0, cb, borderLinePaint)
+        canvas.drawLines(bufSel, 0, cn, selLinePaint)
 
         // Dots
         for (i in 0 until n) {
             val z = vz[i]
             if (z <= 0f) continue
-            if (land[i]) {
-                dotPaint.color = Color.argb((110 + 145 * z).toInt(), 140, 240, 255)
-                canvas.drawCircle(sx[i], sy[i], (1.6f + 1.6f * z) * density, dotPaint)
+            val id = cid[i]
+            if (id == 0) {
+                dotPaint.color = Color.argb((35 + 70 * z).toInt(), 60, 130, 220)
+                canvas.drawCircle(sx[i], sy[i], (0.7f + 0.5f * z) * density, dotPaint)
+            } else if (id == sel) {
+                dotPaint.color = Color.argb((140 + 115 * z).toInt(), 255, 205, 90)
+                canvas.drawCircle(sx[i], sy[i], (1.5f + 1.4f * z) * density, dotPaint)
             } else {
-                dotPaint.color = Color.argb((40 + 80 * z).toInt(), 60, 130, 220)
-                canvas.drawCircle(sx[i], sy[i], (0.7f + 0.6f * z) * density, dotPaint)
+                val base = palette[(id * 7) % palette.size]
+                dotPaint.color = Color.argb(
+                    (100 + 150 * z).toInt(),
+                    Color.red(base), Color.green(base), Color.blue(base)
+                )
+                canvas.drawCircle(sx[i], sy[i], (1.2f + 1.3f * z) * density, dotPaint)
             }
         }
 
@@ -311,7 +355,7 @@ class GlobeView @JvmOverloads constructor(
         canvas.drawCircle(cx, cy, 9f * density, crossPaint)
         canvas.drawCircle(cx, cy, 2f * density, crossPaint)
 
-        drawClock(canvas)
+        drawInfo(canvas, sel)
 
         postInvalidateOnAnimation()
     }
@@ -396,11 +440,30 @@ class GlobeView @JvmOverloads constructor(
         }
     }
 
-    private fun drawClock(canvas: Canvas) {
-        val offset = Math.round(rotLon / 15.0).toInt()
-        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        cal.timeInMillis = System.currentTimeMillis() + offset * 3600_000L
+    private fun offsetFor(zone: String, nowMs: Long): Long {
+        if (zone != "LON") {
+            val tz = tzCache.getOrPut(zone) { TimeZone.getTimeZone(zone) }
+            if (tz.id == zone) return tz.getOffset(nowMs).toLong()
+        }
+        return Math.round(rotLon / 15.0) * 3600_000L
+    }
 
+    private fun drawFitted(canvas: Canvas, text: String, x: Float, y: Float, paint: Paint, maxWidth: Float) {
+        val original = paint.textSize
+        val w = paint.measureText(text)
+        if (w > maxWidth) paint.textSize = original * maxWidth / w
+        canvas.drawText(text, x, y, paint)
+        paint.textSize = original
+    }
+
+    private fun drawInfo(canvas: Canvas, sel: Int) {
+        val nowMs = System.currentTimeMillis()
+        val name = if (sel > 0) WorldData.names[sel] else "Ocean"
+        val zone = if (sel > 0) WorldData.zones[sel] else "LON"
+        val offMs = offsetFor(zone, nowMs)
+
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.timeInMillis = nowMs + offMs
         val time = String.format(
             Locale.US, "%02d:%02d:%02d",
             cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND)
@@ -409,15 +472,21 @@ class GlobeView @JvmOverloads constructor(
             Locale.US, "%04d-%02d-%02d",
             cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
         )
-        val sign = if (offset >= 0) "+" else "-"
-        val utc = "UTC" + sign + Math.abs(offset)
-        val latStr = String.format(Locale.US, "%.1f%s", Math.abs(rotLat), if (rotLat >= 0) "N" else "S")
-        val lonStr = String.format(Locale.US, "%.1f%s", Math.abs(rotLon), if (rotLon >= 0) "E" else "W")
+        val totalMin = (offMs / 60000L).toInt()
+        val sign = if (totalMin >= 0) "+" else "-"
+        val hh = abs(totalMin) / 60
+        val mm = abs(totalMin) % 60
+        val utc = if (mm == 0) "UTC$sign$hh" else String.format(Locale.US, "UTC%s%d:%02d", sign, hh, mm)
 
-        val baseY = cy + radius + 70f * density
-        canvas.drawText(time, cx, baseY, timePaint)
-        canvas.drawText("$date   $utc", cx, baseY + 26f * density, subPaint)
-        canvas.drawText("$latStr  $lonStr", cx, baseY + 48f * density, subPaint)
+        val w = width.toFloat()
+        val globeBottom = cy + radius
+        drawFitted(canvas, name, cx, globeBottom + 30f * density, countryPaint, w * 0.9f)
+        canvas.drawText(time, cx, globeBottom + 76f * density, timePaint)
+        canvas.drawText("$date   $utc", cx, globeBottom + 100f * density, subPaint)
+
+        ElvenText.draw(canvas, ownerName, cx, globeBottom + 128f * density, 30f * density, w * 0.92f)
+
+        drawFitted(canvas, instagram, cx, globeBottom + 198f * density, instaPaint, w * 0.9f)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -457,30 +526,5 @@ class GlobeView @JvmOverloads constructor(
         while (r > 180.0) r -= 360.0
         while (r < -180.0) r += 360.0
         return r
-    }
-
-    private fun isLand(lonDeg: Double, latDeg: Double): Boolean {
-        if (latDeg < -72.0) return true
-        for (poly in polygons) {
-            if (inPolygon(poly, lonDeg, latDeg)) return true
-        }
-        return false
-    }
-
-    private fun inPolygon(poly: FloatArray, px: Double, py: Double): Boolean {
-        var inside = false
-        val count = poly.size / 2
-        var j = count - 1
-        for (i in 0 until count) {
-            val xi = poly[2 * i].toDouble()
-            val yi = poly[2 * i + 1].toDouble()
-            val xj = poly[2 * j].toDouble()
-            val yj = poly[2 * j + 1].toDouble()
-            if ((yi > py) != (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
-                inside = !inside
-            }
-            j = i
-        }
-        return inside
     }
 }
