@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PathMeasure
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -213,6 +214,24 @@ class GlobeRenderer(context: Context, private val wallpaper: Boolean) {
     private val goldCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 1.7f * density
+    }
+    private val emblemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.rgb(205, 25, 35)
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val emblemPath = Path()
+    private val gulfPath = Path()
+    private val gulfMeasure = PathMeasure()
+    private val gulfGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+    }
+    private val gulfTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
     }
     private val flagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val satPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
@@ -645,6 +664,7 @@ class GlobeRenderer(context: Context, private val wallpaper: Boolean) {
             drawBand(canvas, top - third, top - 2f * third, l0, l1, Color.argb(225, 248, 248, 248))
             drawBand(canvas, top - 2f * third, bottom - 3f, l0, l1, Color.argb(215, 218, 30, 40))
             canvas.restore()
+            drawEmblem(canvas, (main.minLon + main.maxLon) / 2f, top - 1.5f * third, third)
         }
 
         // Golden border with a glow that grows when Iran comes to the middle
@@ -659,6 +679,100 @@ class GlobeRenderer(context: Context, private val wallpaper: Boolean) {
                 canvas.drawLines(rbuf, 0, c, goldCorePaint)
             }
         }
+
+        drawGulfLabel(canvas, t.toFloat(), pulse)
+    }
+
+    /** The red emblem in the middle of the flag (a simple drawing of the tulip shaped sign). */
+    private fun drawEmblem(canvas: Canvas, lon: Float, lat: Float, band: Float) {
+        projectDeg(lon, lat)
+        if (projTmp[2] < 0.3f) return
+        val s = band * 0.36f
+        val k = 1f / cos(Math.toRadians(lat.toDouble())).toFloat()
+        emblemPaint.strokeWidth = max(1.2f * density, radius * s * 0.0049f)
+        emblemPath.reset()
+
+        // the sword in the middle and its small cross bar
+        emblemPoint(lon, lat, 0f, -1.15f * s, k, true)
+        emblemPoint(lon, lat, 0f, 1.05f * s, k, false)
+        emblemPoint(lon, lat, -0.30f * s, -0.25f * s, k, true)
+        emblemPoint(lon, lat, 0.30f * s, -0.25f * s, k, false)
+
+        // the two curved sides, like the petals of a tulip
+        var a = 130
+        while (a <= 230) {
+            val r = Math.toRadians(a.toDouble())
+            emblemPoint(lon, lat, s * (0.55f + cos(r).toFloat()), s * sin(r).toFloat(), k, a == 130)
+            a += 10
+        }
+        a = -50
+        while (a <= 50) {
+            val r = Math.toRadians(a.toDouble())
+            emblemPoint(lon, lat, s * (-0.55f + cos(r).toFloat()), s * sin(r).toFloat(), k, a == -50)
+            a += 10
+        }
+        // two smaller inner curves
+        a = 140
+        while (a <= 220) {
+            val r = Math.toRadians(a.toDouble())
+            emblemPoint(lon, lat, s * (0.45f + 0.6f * cos(r).toFloat()), s * 0.6f * sin(r).toFloat(), k, a == 140)
+            a += 10
+        }
+        a = -40
+        while (a <= 40) {
+            val r = Math.toRadians(a.toDouble())
+            emblemPoint(lon, lat, s * (-0.45f + 0.6f * cos(r).toFloat()), s * 0.6f * sin(r).toFloat(), k, a == -40)
+            a += 10
+        }
+        canvas.drawPath(emblemPath, emblemPaint)
+    }
+
+    private fun emblemPoint(lon: Float, lat: Float, du: Float, dv: Float, k: Float, first: Boolean) {
+        projectDeg(lon + du * k, lat + dv)
+        val x = cx + radius * projTmp[0]
+        val y = cy - radius * projTmp[1]
+        if (first) emblemPath.moveTo(x, y) else emblemPath.lineTo(x, y)
+    }
+
+    /** The glowing words "PERSIAN GULF" drawn along the Gulf; they shine when Iran comes to the middle. */
+    private fun drawGulfLabel(canvas: Canvas, t: Float, pulse: Float) {
+        if (t < 0.05f) return
+        gulfPath.reset()
+        var minZ = 1f
+        var first = true
+        var lon = 37f
+        while (lon <= 66f) {
+            val lat = 27.55f - 0.40f * (lon - 51.5f)
+            projectDeg(lon, lat)
+            if (projTmp[2] < minZ) minZ = projTmp[2]
+            val x = cx + radius * projTmp[0]
+            val y = cy - radius * projTmp[1]
+            if (first) gulfPath.moveTo(x, y) else gulfPath.lineTo(x, y)
+            first = false
+            lon += 1f
+        }
+        if (minZ < 0.1f) return
+        val vis = (((minZ - 0.1f) / 0.3f).coerceIn(0f, 1f) * t * pulse).coerceIn(0f, 1f)
+        val text = "PERSIAN GULF"
+        val size = radius * 0.042f
+        gulfTextPaint.textSize = size
+        gulfTextPaint.letterSpacing = 0.18f
+        gulfGlowPaint.textSize = size
+        gulfGlowPaint.letterSpacing = 0.18f
+        gulfMeasure.setPath(gulfPath, false)
+        val len = gulfMeasure.length
+        val w = gulfTextPaint.measureText(text)
+        val off = if (len > w) (len - w) / 2f else 0f
+        val vOff = size * 0.35f
+
+        gulfGlowPaint.strokeWidth = size * 0.55f
+        gulfGlowPaint.color = Color.argb((80 * vis).toInt(), 255, 170, 30)
+        canvas.drawTextOnPath(text, gulfPath, off, vOff, gulfGlowPaint)
+        gulfGlowPaint.strokeWidth = size * 0.22f
+        gulfGlowPaint.color = Color.argb((170 * vis).toInt(), 255, 205, 70)
+        canvas.drawTextOnPath(text, gulfPath, off, vOff, gulfGlowPaint)
+        gulfTextPaint.color = Color.argb((255 * vis).toInt(), 255, 246, 205)
+        canvas.drawTextOnPath(text, gulfPath, off, vOff, gulfTextPaint)
     }
 
     private fun drawBand(canvas: Canvas, latHi: Float, latLo: Float, lonA: Float, lonB: Float, color: Int) {
