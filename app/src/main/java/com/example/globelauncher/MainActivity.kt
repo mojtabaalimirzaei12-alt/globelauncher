@@ -1,6 +1,8 @@
 package com.example.globelauncher
 
 import android.app.Activity
+import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -34,12 +36,42 @@ class MainActivity : Activity() {
             }
         }
         val lp = FrameLayout.LayoutParams(
-            (160 * density).toInt(),
+            (150 * density).toInt(),
             (48 * density).toInt(),
-            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            Gravity.BOTTOM or Gravity.START
         )
         lp.bottomMargin = (28 * density).toInt()
+        lp.marginStart = (24 * density).toInt()
         root.addView(button, lp)
+
+        val wpButton = Button(this).apply {
+            text = "Wallpaper"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(120, 20, 80, 140))
+            setOnClickListener {
+                try {
+                    val i = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+                    i.putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(this@MainActivity, GlobeWallpaperService::class.java)
+                    )
+                    startActivity(i)
+                } catch (e: Exception) {
+                    try {
+                        startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+                    } catch (e2: Exception) {
+                    }
+                }
+            }
+        }
+        val lp2 = FrameLayout.LayoutParams(
+            (150 * density).toInt(),
+            (48 * density).toInt(),
+            Gravity.BOTTOM or Gravity.END
+        )
+        lp2.bottomMargin = (28 * density).toInt()
+        lp2.marginEnd = (24 * density).toInt()
+        root.addView(wpButton, lp2)
 
         setContentView(root)
         hideSystemBars()
