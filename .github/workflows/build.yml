@@ -16,6 +16,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
+      - name: Download Earth picture and country map
+        run: |
+          mkdir -p app/src/main/assets
+          dl() { out="$1"; shift; for u in "$@"; do if curl -fsSL --retry 2 "$u" -o "$out" && [ -s "$out" ]; then echo "ok $u"; return 0; fi; done; echo "FAILED $out"; return 1; }
+          dl app/src/main/assets/countries.json \
+            https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json \
+            https://unpkg.com/world-atlas@2.0.2/countries-110m.json
+          dl app/src/main/assets/earth.jpg \
+            https://cdn.jsdelivr.net/gh/mrdoob/three.js@r150/examples/textures/planets/earth_atmos_2048.jpg \
+            https://raw.githubusercontent.com/mrdoob/three.js/r150/examples/textures/planets/earth_atmos_2048.jpg \
+            https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_atmos_2048.jpg
+          ls -la app/src/main/assets
       - name: Build debug APK
         run: gradle assembleDebug
       - uses: actions/upload-artifact@v4
